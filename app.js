@@ -120,18 +120,26 @@ loader.load(
     );
 
     // Center model
-    model.position.sub(center);
-
-    // Normalize size
-    const maxDimension = Math.max(
-      size.x,
-      size.y,
-      size.z
-    );
-
+    // Center the geometry inside a parent group
+    const modelGroup = new THREE.Group();
+    scene.add(modelGroup);
+      
+    // Remove model from scene and put it inside the group
+    scene.remove(model);
+    modelGroup.add(model);
+      
+    // Scale the model first
+    const maxDimension = Math.max(size.x, size.y, size.z);
     const scale = 3 / maxDimension;
-
+      
     model.scale.setScalar(scale);
+      
+    // Center using the scaled coordinates
+    model.position.set(
+      -center.x * scale,
+      -center.y * scale,
+      -center.z * scale
+    );
 
     // Set camera
     camera.position.set(4, 2, 5);

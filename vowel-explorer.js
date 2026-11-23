@@ -1,106 +1,472 @@
-// Data-driven vowel explorer. Absolute timestamps extracted from the source WAV using Praat/Burg.
-const DATA='data/formants_timestamped_drukmo.csv';
-const AUDIO='audio/22050_norm/F-Bud-Green_Tara_mantra-Drukmo_Gyal.wav';
-let frames=[], audio=null, panel=null, canvas=null, ctx=null, visible=false, selected=null;
-let segments=[], playing=false, playIndex=0, playbackTimer=null;
-const P={left:49,right:19,top:39,bottom:43};
-const R={f1min:150,f1max:1150,f2min:400,f2max:3200};
-const W=460,H=350;
-const x=f2=>P.left+(R.f2max-f2)/(R.f2max-R.f2min)*(W-P.left-P.right);
-const y=f1=>P.top+(f1-R.f1min)/(R.f1max-R.f1min)*(H-P.top-P.bottom);
-const fromX=xx=>R.f2max-(xx-P.left)/(W-P.left-P.right)*(R.f2max-R.f2min);
-const fromY=yy=>R.f1min+(yy-P.top)/(H-P.top-P.bottom)*(R.f1max-R.f1min);
-export function initVowelExplorer(){
- panel=document.createElement('section');panel.id='vowel-explorer';panel.setAttribute('aria-label','Vowel resonance listening explorer');
- panel.innerHTML=
-    `  <div class="vowel-top">
-    <strong>VOWEL RESONANCE MAP</strong>
-    <span>DRUKMO GYAL · GREEN TARA</span>
-  </div>
+// PLAYABLE VOWEL SPACE + CHANT ANALYSIS
+// Screen 2: SoundGen sample crossfading
+// Screen 3: Green Tara formant trajectory
 
-  <div class="vowel-explanation">
-    <p>
-      <strong>What is a formant?</strong><br>
-      A formant is a resonant frequency of the vocal tract.
-      As we chant or speak, the tongue, jaw, and lips reshape
-      the mouth and throat, amplifying different frequencies.
-      These resonances help distinguish vowel sounds.
+const VOWELS = {
+  a: [800, 1400],
+  e: [550, 1850],
+  i: [300, 2500],
+  o: [600, 980],
+  u: [300, 740]
+};
+
+const SAMPLES = Object.keys(VOWELS).map(name => ({
+  name,
+  url: `audio/vowels/${name}_up_bbbb.wav`
+}));
+
+const CHANT = 'audio/22050_norm/F-Bud-Green_Tara_mantra-Drukmo_Gyal.wav';
+const DATA = 'data/formants_timestamped_drukmo.csv';
+
+const W = 650;
+const H = 390;
+const B = { l: 65, r: 610, t: 45, b: 345 };
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const px = f2 => B.l + (3200 - f2) / 2800 * (B.r - B.l);
+const py = f1 => B.t + (f1 - 200) / 800 * (B.b - B.t);
+
+let panel, canvas, g, readout;
+let mode = 'vowels';
+let F1 = 550, F2 = 1850;
+let audioCtx = null;
+let tracks = [];
+let master = null;
+let started = false;
+let loading = false;
+let dragging = false;
+
+let chantAudio;
+let frames = [];
+let animationId = null;
+
+export function initVowelExplorer() {
+  panel = document.createElement('section');
+  panel.id = 'vowel-explorer';
+
+  panel.innerHTML = `
+    <div class="vowel-top">
+      <strong id="explorer-title">PLAYABLE VOWEL SPACE</strong>
+      <span id="explorer-subtitle">F1 / F2 · SOUNDGEN</span>
+    </div>
+
+    <p class="vowel-instruction" id="explorer-instruction">
+      Press Start, then drag across the map to blend five vowel sounds.
     </p>
 
-    <p>
-      <strong>F1 — Tongue height / Vowel openness</strong><br>
-      The first formant is associated with tongue height.
-      Higher F1 generally corresponds to a lower tongue
-      position and a more open vowel.
+    <canvas width="${W}" height="${H}"></canvas>
+
+    <div class="vowel-bottom">
+      <button id="sound-start">▶ Start sound</button>
+      <button id="sound-stop">■ Stop</button>
+      <span id="vowel-status">Ready</span>
+    </div>
+
+    <p class="vowel-note" id="explorer-note">
+      F2 increases to the left; F1 increases downward.
+      Sounds are blended recordings, not synthesized formants.
     </p>
 
-    <p>
-      <strong>F2 — Tongue frontness / Backness</strong><br>
-      The second formant is associated with the tongue's
-      front-to-back position.
-      Higher F2 generally corresponds to a more forward
-      tongue position.
-    </p>
+    <div class="vowel-bottom">
+      <button id="next-screen">EXPLORE THE CHANT →</button>
+      <button id="previous-screen" style="display:none">
+        ← BACK TO VOWELS
+      </button>
+      <button id="close-explorer">CLOSE</button>
+    </div>
+  `;
 
-    <p>
-      <strong>Reading the map:</strong><br>
-      Moving downward: higher F1, more open vowels.<br>
-      Moving leftward: higher F2, more front vowels.
-    </p>
-  </div>
+  document.body.appendChild(panel);
 
-  <p class="vowel-instruction">
-    Each point represents a measured moment in the chant.
-    Drag across a region to hear corresponding passages.
-  </p>
+  canvas = panel.querySelector('canvas');
+  g = canvas.getContext('2d');
+  readout = panel.querySelector('#vowel-status');
 
-  <canvas
-    width="460"
-    height="350"
-    aria-label="F1–F2 vowel resonance scatterplot; drag to select">
-  </canvas>
+  chantAudio = new Audio(CHANT);
+  chantAudio.preload = 'auto';
 
-  <div class="vowel-bottom">
-    <button id="vowel-full" type="button">▶ Full chant</button>
-    <button id="vowel-stop" type="button">■ Stop</button>
-    <span id="vowel-status" aria-live="polite">
-      Loading measurements…
-    </span>
-  </div>
+  panel.querySelector('#sound-start').addEventListener('click', () => {
+    if (mode === 'vowels') startVowels();
+    else playChant();
+  });
 
-  <p class="vowel-note">
-    F1 and F2 are acoustic measurements in Hz,
-    not direct measurements of tongue position.
-  </p>`;
- document.body.append(panel);canvas=panel.querySelector('canvas');ctx=canvas.getContext('2d');
- audio=new Audio(AUDIO);audio.preload='auto';
- panel.querySelector('#vowel-full').addEventListener('click',()=>{stop();audio.currentTime=0;audio.play().then(()=>status('Playing complete chant')).catch(()=>status('Audio playback unavailable'));});
- panel.querySelector('#vowel-stop').addEventListener('click',stop);
- let drag=null;
- const pos=e=>{let r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}};
- canvas.addEventListener('pointerdown',e=>{let p=pos(e);drag={a:p,b:p};canvas.setPointerCapture(e.pointerId);stop();draw(drag)});
- canvas.addEventListener('pointermove',e=>{if(!drag)return;drag.b=pos(e);draw(drag)});
- canvas.addEventListener('pointerup',e=>{if(!drag)return;drag.b=pos(e);let a=drag.a,b=drag.b;drag=null;if(Math.abs(a.x-b.x)<7||Math.abs(a.y-b.y)<7){draw();return}selected={f1min:Math.min(fromY(a.y),fromY(b.y)),f1max:Math.max(fromY(a.y),fromY(b.y)),f2min:Math.min(fromX(a.x),fromX(b.x)),f2max:Math.max(fromX(a.x),fromX(b.x))};draw();playSelection()});
- fetch(DATA).then(r=>{if(!r.ok)throw Error('Data missing');return r.text()}).then(t=>{frames=t.trim().split(/\r?\n/).slice(1).map(s=>s.split(',').map(Number)).filter(r=>r.length===3&&r.every(Number.isFinite));status(`${frames.length} timestamped measurements · select a region`);draw()}).catch(e=>status(e.message));draw();
+  panel.querySelector('#sound-stop').addEventListener('click', stopAll);
+
+  panel.querySelector('#next-screen').addEventListener('click', () => {
+    stopAll();
+    mode = 'chant';
+    updateMode();
+  });
+
+  panel.querySelector('#previous-screen').addEventListener('click', () => {
+    stopAll();
+    mode = 'vowels';
+    updateMode();
+  });
+
+  panel.querySelector('#close-explorer').addEventListener('click', () => {
+    setVowelExplorerVisible(false);
+  });
+
+  canvas.addEventListener('pointerdown', e => {
+    if (mode !== 'vowels') return;
+    dragging = true;
+    canvas.setPointerCapture(e.pointerId);
+    movePointer(e);
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    if (dragging && mode === 'vowels') movePointer(e);
+  });
+
+  canvas.addEventListener('pointerup', () => dragging = false);
+  canvas.addEventListener('pointercancel', () => dragging = false);
+
+  fetch(DATA)
+    .then(r => {
+      if (!r.ok) throw new Error('Chant measurements unavailable');
+      return r.text();
+    })
+    .then(text => {
+      frames = text.trim().split(/\r?\n/)
+        .slice(1)
+        .map(row => row.split(',').map(Number))
+        .filter(row => row.length === 3 && row.every(Number.isFinite));
+    })
+    .catch(console.error);
+
+  updateMode();
 }
-function status(s){if(panel)panel.querySelector('#vowel-status').textContent=s}
-export function setVowelExplorerVisible(v){visible=v;if(panel)panel.classList.toggle('visible',v);if(!v)stop()}
-function stop(){if(playbackTimer){clearTimeout(playbackTimer);playbackTimer=null}playing=false;if(audio){audio.pause()}if(panel&&frames.length)status('Stopped · drag to explore')}
-function draw(drag){if(!ctx)return;ctx.clearRect(0,0,W,H);ctx.fillStyle='#10151c';ctx.fillRect(0,0,W,H);ctx.strokeStyle='#43505a';ctx.strokeRect(P.left,P.top,W-P.left-P.right,H-P.top-P.bottom);
- ctx.fillStyle='#d8b97b';ctx.font='12px monospace';ctx.fillText('FRONT  ·  F2 resonance (Hz)  ·  BACK',P.left,20);ctx.fillText('CLOSED',3,P.top-11);ctx.fillText('OPEN',7,H-13);
- for(let i=0;i<=4;i++){let xx=P.left+i*(W-P.left-P.right)/4;ctx.fillStyle='#89949d';ctx.fillText(String(Math.round(fromX(xx))),xx-16,H-22)}
- for(const [t,f1,f2] of frames){let isSel=selected&&f1>=selected.f1min&&f1<=selected.f1max&&f2>=selected.f2min&&f2<=selected.f2max;ctx.fillStyle=isSel?'rgba(234,188,100,.9)':'rgba(142,207,216,.27)';ctx.beginPath();ctx.arc(x(f2),y(f1),isSel?2.8:1.8,0,Math.PI*2);ctx.fill()}
- let rect=drag?{x1:drag.a.x,x2:drag.b.x,y1:drag.a.y,y2:drag.b.y}:selected?{x1:x(selected.f2max),x2:x(selected.f2min),y1:y(selected.f1min),y2:y(selected.f1max)}:null;
- if(rect){let xx=Math.min(rect.x1,rect.x2),yy=Math.min(rect.y1,rect.y2);ctx.strokeStyle='#eabc64';ctx.lineWidth=2;ctx.strokeRect(xx,yy,Math.abs(rect.x2-rect.x1),Math.abs(rect.y2-rect.y1))}
+
+export function setVowelExplorerVisible(visible) {
+  if (!panel) return;
+  panel.classList.toggle('visible', visible);
+
+  if (!visible) {
+    stopAll();
+    mode = 'vowels';
+    updateMode();
+  }
 }
-function playSelection(){if(!selected||!frames.length)return;
- const hits=frames.filter(([t,f1,f2])=>f1>=selected.f1min&&f1<=selected.f1max&&f2>=selected.f2min&&f2<=selected.f2max);
- if(!hits.length){status('No measurements in selected region');return}
- // Group measurements using their ACTUAL timestamps, never filtered-row indices.
- let runs=[],cur=[];for(let i=0;i<hits.length;i++){let h=hits[i];if(cur.length&&h[0]-cur[cur.length-1][0]>.12){runs.push(cur);cur=[]}cur.push(h)}if(cur.length)runs.push(cur);
- // Require at least 3 matching frames in a run, then add context to form listenable excerpts.
- segments=runs.filter(r=>r.length>=3).map(r=>{let mid=(r[0][0]+r[r.length-1][0])/2;let dur=Math.min(1.8,Math.max(.65,r[r.length-1][0]-r[0][0]+.35));return {start:Math.max(0,mid-dur/2),end:Math.min(audio.duration||30.33,mid+dur/2),count:r.length}}).sort((a,b)=>b.count-a.count).slice(0,5);
- if(!segments.length){status(`${hits.length} matches, but no sustained region; select a larger area`);return}
- playIndex=0;playing=true;status(`${hits.length} matches · playing ${segments.length} excerpts`);playNext();
+
+function updateMode() {
+  const isChant = mode === 'chant';
+
+  panel.querySelector('#explorer-title').textContent =
+    isChant ? 'CHANT RESONANCE' : 'PLAYABLE VOWEL SPACE';
+
+  panel.querySelector('#explorer-subtitle').textContent =
+    isChant ? 'GREEN TARA · DRUKMO GYAL' : 'F1 / F2 · SOUNDGEN';
+
+  panel.querySelector('#explorer-instruction').textContent =
+    isChant
+      ? 'Listen as the measured resonance moves through acoustic space.'
+      : 'Press Start, then drag across the map to blend five vowel sounds.';
+
+  panel.querySelector('#sound-start').textContent =
+    isChant ? '▶ Play chant' : '▶ Start sound';
+
+  panel.querySelector('#next-screen').style.display =
+    isChant ? 'none' : '';
+
+  panel.querySelector('#previous-screen').style.display =
+    isChant ? '' : 'none';
+
+  panel.querySelector('#explorer-note').textContent =
+    isChant
+      ? 'Each point represents an estimated F1/F2 measurement from the recording.'
+      : 'F2 increases left; F1 increases downward. SoundGen recordings are crossfaded.';
+
+  readout.textContent = isChant
+    ? `${frames.length} measured frames`
+    : 'Move to explore';
+
+  draw();
 }
-function playNext(){if(!playing||playIndex>=segments.length){playing=false;status('Finished · select another region');return}let seg=segments[playIndex++];audio.pause();audio.currentTime=seg.start;audio.play().then(()=>{playbackTimer=setTimeout(()=>{audio.pause();playbackTimer=setTimeout(playNext,180)},Math.max(100,(seg.end-seg.start)*1000))}).catch(()=>{playing=false;status('Playback blocked; click again')})}
+
+function weights() {
+  const values = Object.entries(VOWELS).map(([name, [f1, f2]]) => {
+    const dx = (F2 - f2) / 1800;
+    const dy = (F1 - f1) / 650;
+    const d2 = dx * dx + dy * dy;
+
+    return {
+      name,
+      weight: 1 / Math.pow(d2 + 0.0008, 1.5)
+    };
+  });
+
+  const total = values.reduce((sum, v) => sum + v.weight, 0);
+
+  return values.map(v => ({
+    ...v,
+    weight: v.weight / total
+  }));
+}
+
+function updateSound() {
+  const w = weights();
+
+  if (started) {
+    for (const track of tracks) {
+      const value = w.find(v => v.name === track.name).weight;
+
+      track.gain.gain.setTargetAtTime(
+        Math.sqrt(value) * 0.40,
+        audioCtx.currentTime,
+        0.055
+      );
+    }
+  }
+
+  const nearest = [...w].sort((a, b) => b.weight - a.weight);
+
+  readout.textContent =
+    `F1 ${Math.round(F1)} Hz · F2 ${Math.round(F2)} Hz · ` +
+    nearest.slice(0, 2).map(v =>
+      `${v.name.toUpperCase()} ${Math.round(v.weight * 100)}%`
+    ).join(' / ');
+
+  draw();
+}
+
+function movePointer(e) {
+  const rect = canvas.getBoundingClientRect();
+
+  const x = clamp(
+    (e.clientX - rect.left) * W / rect.width,
+    B.l, B.r
+  );
+
+  const y = clamp(
+    (e.clientY - rect.top) * H / rect.height,
+    B.t, B.b
+  );
+
+  F2 = 3200 - (x - B.l) / (B.r - B.l) * 2800;
+  F1 = 200 + (y - B.t) / (B.b - B.t) * 800;
+
+  updateSound();
+}
+
+async function startVowels() {
+  if (started || loading) return;
+
+  loading = true;
+  readout.textContent = 'Loading vowel recordings…';
+
+  try {
+    audioCtx = new AudioContext();
+    await audioCtx.resume();
+
+    master = audioCtx.createGain();
+    master.gain.value = 0.85;
+    master.connect(audioCtx.destination);
+
+    for (const sample of SAMPLES) {
+      const response = await fetch(sample.url);
+
+      if (!response.ok) {
+        throw new Error(`Missing ${sample.url}`);
+      }
+
+      const bytes = await response.arrayBuffer();
+      const buffer = await audioCtx.decodeAudioData(bytes);
+
+      const source = audioCtx.createBufferSource();
+      const gain = audioCtx.createGain();
+
+      source.buffer = buffer;
+      source.loop = true;
+      gain.gain.value = 0;
+
+      source.connect(gain);
+      gain.connect(master);
+
+      tracks.push({
+        name: sample.name,
+        source,
+        gain
+      });
+    }
+
+    const startTime = audioCtx.currentTime + 0.08;
+
+    for (const track of tracks) {
+      track.source.start(startTime);
+    }
+
+    started = true;
+    updateSound();
+
+  } catch (error) {
+    console.error(error);
+    readout.textContent = `Audio error: ${error.message}`;
+    stopVowels();
+  } finally {
+    loading = false;
+  }
+}
+
+function stopVowels() {
+  started = false;
+
+  for (const track of tracks) {
+    try { track.source.stop(); } catch {}
+    track.source.disconnect();
+    track.gain.disconnect();
+  }
+
+  tracks = [];
+
+  if (audioCtx) {
+    audioCtx.close().catch(() => {});
+    audioCtx = null;
+  }
+}
+
+function playChant() {
+  stopVowels();
+
+  chantAudio.currentTime = 0;
+
+  chantAudio.play()
+    .then(() => {
+      animateChant();
+    })
+    .catch(error => {
+      readout.textContent = error.message;
+    });
+}
+
+function animateChant() {
+  cancelAnimationFrame(animationId);
+
+  function tick() {
+    draw();
+
+    if (!chantAudio.paused && !chantAudio.ended) {
+      animationId = requestAnimationFrame(tick);
+    }
+  }
+
+  tick();
+}
+
+function stopAll() {
+  stopVowels();
+
+  chantAudio.pause();
+  chantAudio.currentTime = 0;
+
+  if (animationId !== null) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
+
+  if (panel) {
+    readout.textContent = 'Stopped';
+    draw();
+  }
+}
+
+function draw() {
+  if (!g) return;
+
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#242a2b';
+  g.fillRect(0, 0, W, H);
+
+  g.strokeStyle = '#556266';
+  g.strokeRect(B.l, B.t, B.r - B.l, B.b - B.t);
+
+  g.font = '14px monospace';
+  g.fillStyle = '#e6e2d9';
+
+  g.fillText('F2 HIGH / FRONT ←', B.l, 25);
+  g.fillText('→ F2 LOW / BACK', 430, 25);
+  g.fillText('F1 LOW / CLOSED', B.l, 378);
+  g.fillText('F1 HIGH / OPEN', 450, 378);
+
+  for (let f2 = 400; f2 <= 3200; f2 += 400) {
+    const x = px(f2);
+
+    g.strokeStyle = '#39474a';
+    g.beginPath();
+    g.moveTo(x, B.t);
+    g.lineTo(x, B.b);
+    g.stroke();
+  }
+
+  for (let f1 = 200; f1 <= 1000; f1 += 200) {
+    const y = py(f1);
+
+    g.strokeStyle = '#39474a';
+    g.beginPath();
+    g.moveTo(B.l, y);
+    g.lineTo(B.r, y);
+    g.stroke();
+
+    g.fillStyle = '#aebabc';
+    g.font = '12px monospace';
+    g.fillText(f1, 20, y + 4);
+  }
+
+  if (mode === 'vowels') {
+    for (const [name, [f1, f2]] of Object.entries(VOWELS)) {
+      const x = px(f2);
+      const y = py(f1);
+
+      g.fillStyle = '#d2d6c9';
+      g.beginPath();
+      g.arc(x, y, 6, 0, Math.PI * 2);
+      g.fill();
+
+      g.font = 'bold 16px monospace';
+      g.fillText(name.toUpperCase(), x + 11, y - 9);
+    }
+
+    g.strokeStyle = '#f3c078';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.arc(px(F2), py(F1), 12, 0, Math.PI * 2);
+    g.stroke();
+    g.lineWidth = 1;
+
+  } else {
+    // Plot the actual measured chant points.
+    for (const [time, f1, f2] of frames) {
+      g.fillStyle = 'rgba(142,207,216,0.28)';
+      g.beginPath();
+      g.arc(px(f2), py(f1), 1.8, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // Highlight the measurement nearest the current playback time.
+    if (!chantAudio.paused && frames.length) {
+      const t = chantAudio.currentTime;
+
+      let closest = frames[0];
+      let distance = Infinity;
+
+      for (const frame of frames) {
+        const d = Math.abs(frame[0] - t);
+
+        if (d < distance) {
+          closest = frame;
+          distance = d;
+        }
+      }
+
+      const [time, f1, f2] = closest;
+
+      g.fillStyle = '#f3c078';
+      g.beginPath();
+      g.arc(px(f2), py(f1), 8, 0, Math.PI * 2);
+      g.fill();
+
+      readout.textContent =
+        `${time.toFixed(2)}s · F1 ${Math.round(f1)} Hz · F2 ${Math.round(f2)} Hz`;
+    }
+  }
+}
