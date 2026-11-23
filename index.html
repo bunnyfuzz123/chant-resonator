@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Perceptual Device: Chanting Machine Resonator</title>
+
+  <title>Anatomy of Resonance</title>
+
   <link rel="stylesheet" href="style.css">
+
   <script type="importmap">
   {
     "imports": {
@@ -14,72 +17,78 @@
   }
   </script>
 </head>
+
 <body>
+
+  <!-- Existing Three.js canvas -->
   <div id="canvas-container"></div>
 
-  <!-- UI Overlay -->
+  <!-- Title -->
   <header class="hud-header">
-    <div class="hud-badge">Digital Musicologies &bull; Perceptual Device</div>
-    <h1 class="hud-title">DEVOTIONAL CHANTING RESONATOR</h1>
-    <p class="hud-subtitle">Acoustic Artifact &bull; Exploded Mechanical Study</p>
+    <div class="hud-badge">DIGITAL MUSICOLOGIES</div>
+
+    <h1 class="hud-title">
+      ANATOMY OF RESONANCE
+    </h1>
+
+    <p class="hud-subtitle">
+      The Vocal Tract as a Resonating Chamber
+    </p>
   </header>
 
-  <!-- Controls Panel -->
-  <div class="hud-controls">
-    <div class="control-card">
-      <div class="card-header">
-        <span class="status-dot" id="status-dot"></span>
-        <span class="card-title">DEVICE STATE: <strong id="state-label">CLOSED CASING</strong></span>
-      </div>
+  <!-- Introduction -->
+  <section class="intro-panel">
+    <h2>THE VOCAL TRACT</h2>
 
-      <div class="button-row">
-        <button id="toggle-explode-btn" class="primary-btn">
-          <svg class="btn-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 8l4-4m0 0l4 4M8 4v12m12 0l-4 4m0 0l-4-4m4 4V8" />
-          </svg>
-          <span id="btn-text">Open Exploded View</span>
-        </button>
-        <button id="reset-cam-btn" class="secondary-btn" title="Reset Camera View">
-          Reset View
-        </button>
-      </div>
-
-      <div class="slider-row">
-        <label for="explode-slider">Explosion Gap:</label>
-        <input type="range" id="explode-slider" min="0" max="1" step="0.01" value="0">
-        <span id="slider-val">0%</span>
-      </div>
-    </div>
-
-    <!-- Quick Camera Presets -->
-    <div class="preset-row">
-      <button class="preset-btn" data-view="front">Front</button>
-      <button class="preset-btn" data-view="isometric">3/4 Angle</button>
-      <button class="preset-btn" data-view="top">Top</button>
-      <button class="preset-btn" data-view="side">Profile</button>
-    </div>
-  </div>
-
-  <!-- Data Context & Critical Note Overlay -->
-  <aside class="hud-info">
-    <div class="info-tag">CONCEPT & DATA INTEGRITY</div>
     <p>
-      Modeled on portable electronic devotional chanting boxes (念佛机). Inside, the device will house physical sculptural forms corresponding to empirical acoustic measurements from sacred chant traditions (Tibetan Buddhist, Gregorian, Dhikr, Hindu, Shamanic).
+      The human voice begins with vibration.
+      The vocal tract shapes that vibration
+      into recognizable sound.
     </p>
-    <div class="info-note">
-      <strong>Framing:</strong> The prayer machine is an artistic lens for perceptual listening, not a claim that all chants originate from prayer machines. Acoustic metrics describe excerpts as wholes without fabricated contours.
-    </div>
-  </aside>
 
-  <!-- Instructions footer -->
+    <p>
+      Explore the chamber through which
+      devotional voices resonate.
+    </p>
+  </section>
+
+  <!-- Chant selection -->
+  <section class="chant-panel">
+
+    <h2>LISTEN TO THE CHANTS</h2>
+
+    <button
+      class="chant-btn"
+      data-src="audio/22050_norm/F-Bud-Green_Tara_mantra-Drukmo_Gyal.wav">
+      ▶ CHANT 01 — GREEN TARA
+    </button>
+
+    <button class="chant-btn" data-src="">
+      ▶ CHANT 02
+    </button>
+
+    <button class="chant-btn" data-src="">
+      ▶ CHANT 03
+    </button>
+
+    <button id="stop-audio">
+      ■ STOP
+    </button>
+
+    <button id="enter-vowels">
+      ENTER THE VOWEL SPACE →
+    </button>
+
+  </section>
+
+  <!-- Viewer instructions -->
   <footer class="hud-footer">
-    <span><strong>Orbit:</strong> Left Click + Drag</span>
-    <span class="separator">&bull;</span>
-    <span><strong>Zoom:</strong> Scroll</span>
-    <span class="separator">&bull;</span>
-    <span><strong>Pan:</strong> Right Click + Drag</span>
+    DRAG TO ROTATE &nbsp;·&nbsp; SCROLL TO ZOOM
   </footer>
 
+  <audio id="chant-audio"></audio>
+
   <script type="module" src="app.js"></script>
+
 </body>
 </html>
