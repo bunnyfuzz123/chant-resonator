@@ -7,12 +7,12 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:         #0d0e12;
+  --bg:         #ffffff;
   --accent:     #c8a96e;      /* warm gold */
   --accent2:    #8ecfd8;      /* cool cyan */
   --panel:      rgba(255,255,255,0.06);
   --panel-b:    rgba(255,255,255,0.12);
-  --text:       #e8e4dc;
+  --text:       #000000;
   --muted:      rgba(232,228,220,0.5);
   --radius:     6px;
   --font-mono:  'Courier New', Courier, monospace;

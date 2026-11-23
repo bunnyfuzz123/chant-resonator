@@ -12,7 +12,66 @@ const fromX=xx=>R.f2max-(xx-P.left)/(W-P.left-P.right)*(R.f2max-R.f2min);
 const fromY=yy=>R.f1min+(yy-P.top)/(H-P.top-P.bottom)*(R.f1max-R.f1min);
 export function initVowelExplorer(){
  panel=document.createElement('section');panel.id='vowel-explorer';panel.setAttribute('aria-label','Vowel resonance listening explorer');
- panel.innerHTML=`<div class="vowel-top"><strong>VOICE / RESONANCE</strong><span>DRUKMO GYAL · GREEN TARA</span></div><p class="vowel-instruction">Drag across a region of the acoustic map to hear passages that resonate there.</p><canvas width="460" height="350" aria-label="F1–F2 vowel resonance scatterplot; drag to select"></canvas><div class="vowel-bottom"><button id="vowel-full" type="button">▶ Full chant</button><button id="vowel-stop" type="button">■ Stop</button><span id="vowel-status" aria-live="polite">Loading measurements…</span></div><p class="vowel-note">F2: front ← → back · F1: closed ↑ ↓ open. Measurements are acoustic estimates, not literal mouth positions.</p>`;
+ panel.innerHTML=
+    `  <div class="vowel-top">
+    <strong>VOWEL RESONANCE MAP</strong>
+    <span>DRUKMO GYAL · GREEN TARA</span>
+  </div>
+
+  <div class="vowel-explanation">
+    <p>
+      <strong>What is a formant?</strong><br>
+      A formant is a resonant frequency of the vocal tract.
+      As we chant or speak, the tongue, jaw, and lips reshape
+      the mouth and throat, amplifying different frequencies.
+      These resonances help distinguish vowel sounds.
+    </p>
+
+    <p>
+      <strong>F1 — Tongue height / Vowel openness</strong><br>
+      The first formant is associated with tongue height.
+      Higher F1 generally corresponds to a lower tongue
+      position and a more open vowel.
+    </p>
+
+    <p>
+      <strong>F2 — Tongue frontness / Backness</strong><br>
+      The second formant is associated with the tongue's
+      front-to-back position.
+      Higher F2 generally corresponds to a more forward
+      tongue position.
+    </p>
+
+    <p>
+      <strong>Reading the map:</strong><br>
+      Moving downward: higher F1, more open vowels.<br>
+      Moving leftward: higher F2, more front vowels.
+    </p>
+  </div>
+
+  <p class="vowel-instruction">
+    Each point represents a measured moment in the chant.
+    Drag across a region to hear corresponding passages.
+  </p>
+
+  <canvas
+    width="460"
+    height="350"
+    aria-label="F1–F2 vowel resonance scatterplot; drag to select">
+  </canvas>
+
+  <div class="vowel-bottom">
+    <button id="vowel-full" type="button">▶ Full chant</button>
+    <button id="vowel-stop" type="button">■ Stop</button>
+    <span id="vowel-status" aria-live="polite">
+      Loading measurements…
+    </span>
+  </div>
+
+  <p class="vowel-note">
+    F1 and F2 are acoustic measurements in Hz,
+    not direct measurements of tongue position.
+  </p>`;
  document.body.append(panel);canvas=panel.querySelector('canvas');ctx=canvas.getContext('2d');
  audio=new Audio(AUDIO);audio.preload='auto';
  panel.querySelector('#vowel-full').addEventListener('click',()=>{stop();audio.currentTime=0;audio.play().then(()=>status('Playing complete chant')).catch(()=>status('Audio playback unavailable'));});
