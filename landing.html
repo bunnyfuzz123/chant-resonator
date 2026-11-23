@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vocal Tract — Anatomy of Resonance</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #101013;
+      color: #e8e4dd;
+      font-family: Georgia, serif;
+      overflow: hidden;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 260px 1fr 250px;
+      height: 100vh;
+    }
+
+    .panel {
+      padding: 35px 25px;
+      z-index: 2;
+    }
+
+    h1 {
+      font-size: 27px;
+      font-weight: normal;
+      line-height: 1.2;
+    }
+
+    h2 {
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #aaa;
+    }
+
+    p {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #aaa;
+    }
+
+    #viewer {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    button {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      margin: 12px 0;
+      border: 1px solid #666;
+      background: transparent;
+      color: #e8e4dd;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    button:hover {
+      background: #29292f;
+    }
+
+    .right {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #enter {
+      margin-top: auto;
+      border-color: #d0b38a;
+      color: #d0b38a;
+      text-align: center;
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #777;
+      font-size: 12px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="layout">
+
+    <section class="panel">
+      <h2>Anatomy of Resonance</h2>
+      <h1>The Vocal Tract</h1>
+
+      <p>
+        The voice begins with vibration.
+        The vocal tract shapes that vibration into sound.
+      </p>
+
+      <p>
+        The mouth, tongue, and throat form a changing
+        resonating chamber.
+      </p>
+
+      <p>
+        Explore this chamber before entering its
+        acoustic space.
+      </p>
+    </section>
+
+    <main id="viewer"></main>
+
+    <section class="panel right">
+      <h2>Devotional Recordings</h2>
+
+      <button class="chant" data-src="audio/22050_norm/F-Bud-Green_Tara_mantra-Drukmo_Gyal.wav">
+        ▶ Chant 01 — Green Tara
+      </button>
+
+      <button class="chant" data-src="">
+        ▶ Chant 02
+      </button>
+
+      <button class="chant" data-src="">
+        ▶ Chant 03
+      </button>
+
+      <button id="stop">■ Stop audio</button>
+
+      <button id="enter">
+        ENTER THE VOWEL SPACE →
+      </button>
+    </section>
+
+  </div>
+
+  <div class="hint">DRAG TO ROTATE · SCROLL TO ZOOM</div>
+
+  <audio id="audio"></audio>
+
+  <script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+  <script type="module">
+
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+    const container = document.getElementById("viewer");
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x101013);
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      container.clientWidth / container.clientHeight,
+      0.1,
+      2000
+    );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+
+    const light = new THREE.DirectionalLight(0xffffff, 3);
+    light.position.set(100, 150, 200);
+    scene.add(light);
+
+    const backLight = new THREE.DirectionalLight(0xb1a3ff, 2);
+    backLight.position.set(-100, -50, -100);
+    scene.add(backLight);
+
+    const loader = new GLTFLoader();
+
+    loader.load(
+      "models/vocalTract.glb",
+
+      (gltf) => {
+        const model = gltf.scene;
+        scene.add(model);
+
+        // Center the model.
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.sub(center);
+
+        // Fit camera to model.
+        const size = box.getSize(new THREE.Vector3());
+        const maxDimension = Math.max(size.x, size.y, size.z);
+
+        camera.position.set(
+          maxDimension * 1.3,
+          maxDimension * 0.6,
+          maxDimension * 1.6
+        );
+
+        camera.lookAt(0, 0, 0);
+        controls.target.set(0, 0, 0);
+        controls.update();
+      },
+
+      undefined,
+
+      (error) => {
+        console.error("Failed to load vocal tract:", error);
+      }
+    );
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener("resize", () => {
+      camera.aspect =
+        container.clientWidth / container.clientHeight;
+
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(
+        container.clientWidth,
+        container.clientHeight
+      );
+    });
+
+    // Chant playback
+    const audio = document.getElementById("audio");
+
+    document.querySelectorAll(".chant").forEach(button => {
+      button.addEventListener("click", () => {
+        const src = button.dataset.src;
+
+        if (!src) {
+          alert("Recording not connected yet.");
+          return;
+        }
+
+        audio.pause();
+        audio.src = src;
+        audio.play().catch(console.error);
+      });
+    });
+
+    document.getElementById("stop").addEventListener("click", () => {
+      audio.pause();
+      audio.currentTime = 0;
+    });
+
+    // Navigation — connect after testing.
+    document.getElementById("enter").addEventListener("click", () => {
+      alert("Next: connect the playable vowel space.");
+    });
+
+  </script>
+
+</body>
+</html>
