@@ -34,6 +34,10 @@ const renderer = new THREE.WebGLRenderer({
   antialias: true
 });
 
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+// renderer.toneMappingExposure = 1.0;
+
 renderer.setPixelRatio(
   Math.min(window.devicePixelRatio, 2)
 );
@@ -79,7 +83,7 @@ scene.add(ambient);
 
 const keyLight = new THREE.DirectionalLight(
   0xffffff,
-  3
+  2
 );
 
 keyLight.position.set(100, 150, 200);
@@ -102,24 +106,19 @@ const loader = new GLTFLoader();
 
 loader.load(
 
-  'models/vocalTract.glb',
+  'models/hairAndLarynx.glb',
 
   (gltf) => {
 
     const model = gltf.scene;
+    const materials = {};
 
     scene.add(model);
 
     // Display vocal tract as wireframe
     model.traverse((child) => {
-      if (child.isMesh) {
-        child.material = new THREE.MeshBasicMaterial({
-          color: 0x444444,
-          wireframe: true,
-          transparent: true,
-          opacity: 0.25,
-          side: THREE.FrontSide
-        });
+      if (child.isMesh && child.material) {
+       materials[child.material.name] = child.material;
       }
     });
 
@@ -157,7 +156,7 @@ loader.load(
     );
 
     // Set camera
-    camera.position.set(4, 2, 5);
+    camera.position.set(4, 0, 5);
 
     camera.lookAt(0, 0, 0);
 
