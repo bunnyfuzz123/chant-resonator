@@ -18,6 +18,8 @@ import {
 
 const container = document.getElementById('canvas-container');
 
+let modelGroup = null;
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffffff);
 
@@ -108,6 +110,19 @@ loader.load(
 
     scene.add(model);
 
+    // Display vocal tract as wireframe
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.material = new THREE.MeshBasicMaterial({
+          color: 0x444444,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.25,
+          side: THREE.FrontSide
+        });
+      }
+    });
+
     // Calculate model dimensions
     const box = new THREE.Box3().setFromObject(model);
 
@@ -121,7 +136,7 @@ loader.load(
 
     // Center model
     // Center the geometry inside a parent group
-    const modelGroup = new THREE.Group();
+    modelGroup = new THREE.Group();
     scene.add(modelGroup);
       
     // Remove model from scene and put it inside the group
@@ -246,9 +261,18 @@ window.addEventListener('resize', () => {
 // RENDER LOOP
 // ========================================
 
+const clock = new THREE.Clock();
+
 function animate() {
 
   requestAnimationFrame(animate);
+
+  const delta = clock.getDelta();
+
+  // Slow, continuous rotation
+  if (modelGroup) {
+    modelGroup.rotation.y += delta * 0.035;
+  }
 
   controls.update();
 

@@ -50,6 +50,26 @@ export function initVowelExplorer() {
       <span id="explorer-subtitle">F1 / F2 · SOUNDGEN</span>
     </div>
 
+    <div class="formant-definition" id="formant-definition">
+
+      <p class="formant-lead">
+        A vowel is not a fixed sound, but a configuration of resonance.
+      </p>
+
+      <p>
+        As sound travels through the vocal tract, its shape amplifies
+        certain frequencies. These resonances are called
+        <strong>formants</strong>.
+      </p>
+
+      <p>
+        The first formant (F1) relates primarily to vowel openness;
+        the second (F2) relates primarily to the front–back position
+        of the tongue. Together, they describe an acoustic space
+        through which vowels can be mapped.
+      </p>
+
+    </div>
     <p class="vowel-instruction" id="explorer-instruction">
       Press Start, then drag across the map to blend five vowel sounds.
     </p>
@@ -80,6 +100,21 @@ export function initVowelExplorer() {
 
   canvas = panel.querySelector('canvas');
   g = canvas.getContext('2d');
+
+  // Render the graph at the display's actual pixel density
+  function sharpenCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+  
+    // Keep the original drawing coordinates
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  
+    draw();
+  }
+  
+  sharpenCanvas();
   readout = panel.querySelector('#vowel-status');
 
   chantAudio = new Audio(CHANT);
@@ -152,6 +187,45 @@ export function setVowelExplorerVisible(visible) {
 function updateMode() {
   const isChant = mode === 'chant';
 
+  const definition = panel.querySelector('#formant-definition');
+
+if (isChant) {
+      definition.innerHTML = `
+        <p class="formant-lead">
+          A chant is a movement through acoustic space.
+        </p>
+
+        <p>
+          This visualization traces the first two estimated formants
+          in a recording of the Green Tara mantra performed by
+          Drukmo Gyal.
+        </p>
+
+        <p>
+          Each point represents a moment of vocal resonance.
+          As the recording plays, the highlighted point follows
+          the changing relationship between F1 and F2.
+        </p>
+      `;
+    } else {
+      definition.innerHTML = `
+        <p class="formant-lead">
+          A vowel is not a fixed sound, but a configuration of resonance.
+        </p>
+
+        <p>
+          As sound travels through the vocal tract, its shape amplifies
+          certain frequencies. These resonances are called
+          <strong>formants</strong>.
+        </p>
+
+        <p>
+          F1 relates primarily to vowel openness, while F2 relates
+          primarily to tongue position. Move through this acoustic
+          space to blend five recorded vowel sounds.
+        </p>
+      `;
+    }
   panel.querySelector('#explorer-title').textContent =
     isChant ? 'CHANT RESONANCE' : 'PLAYABLE VOWEL SPACE';
 
@@ -374,20 +448,18 @@ function draw() {
   if (!g) return;
 
   g.clearRect(0, 0, W, H);
-  g.fillStyle = '#242a2b';
+  g.fillStyle = '#ffffff';
   g.fillRect(0, 0, W, H);
-
   g.strokeStyle = '#556266';
   g.strokeRect(B.l, B.t, B.r - B.l, B.b - B.t);
 
   g.font = '14px monospace';
-  g.fillStyle = '#e6e2d9';
+  g.fillStyle = '#d74683';
 
   g.fillText('F2 HIGH / FRONT ←', B.l, 25);
   g.fillText('→ F2 LOW / BACK', 430, 25);
-  g.fillText('F1 LOW / CLOSED', B.l, 378);
-  g.fillText('F1 HIGH / OPEN', 450, 378);
-
+  g.fillText('F1 (Hz) ↓ OPENNESS', B.l, H - 12);
+  
   for (let f2 = 400; f2 <= 3200; f2 += 400) {
     const x = px(f2);
 
@@ -434,15 +506,44 @@ function draw() {
     g.lineWidth = 1;
 
   } else {
-    // Plot the actual measured chant points.
+     // 1. Draw chant measurements as fine, solid points.
+    g.fillStyle = '#829397';
+
     for (const [time, f1, f2] of frames) {
-      g.fillStyle = 'rgba(142,207,216,0.28)';
-      g.beginPath();
-      g.arc(px(f2), py(f1), 1.8, 0, Math.PI * 2);
-      g.fill();
+      if (!Number.isFinite(f1) || !Number.isFinite(f2)) continue;
+
+      const x = px(f2);
+      const y = py(f1);
+
+      // Keep points inside the plotted acoustic space.
+      if (x < B.l || x > B.r || y < B.t || y > B.b) continue;
+
+      g.fillRect(x - 0.8, y - 0.8, 1.6, 1.6);
     }
 
-    // Highlight the measurement nearest the current playback time.
+    // 2. Overlay the five vowel reference positions.
+    for (const [name, [f1, f2]] of Object.entries(VOWELS)) {
+      const x = px(f2);
+      const y = py(f1);
+
+      // White backing separates the reference from the chant data.
+      g.fillStyle = '#242a2b';
+      g.beginPath();
+      g.arc(x, y, 12, 0, Math.PI * 2);
+      g.fill();
+
+      g.strokeStyle = '#e8e4dc';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.arc(x, y, 7, 0, Math.PI * 2);
+      g.stroke();
+
+      g.fillStyle = '#ffffff';
+      g.font = 'bold 16px Roboto';
+      g.fillText(name.toUpperCase(), x + 15, y - 9);
+    }
+
+    // 3. Highlight the current position during playback.
     if (!chantAudio.paused && frames.length) {
       const t = chantAudio.currentTime;
 
@@ -460,10 +561,23 @@ function draw() {
 
       const [time, f1, f2] = closest;
 
-      g.fillStyle = '#f3c078';
-      g.beginPath();
-      g.arc(px(f2), py(f1), 8, 0, Math.PI * 2);
-      g.fill();
+      if (
+        Number.isFinite(f1) &&
+        Number.isFinite(f2) &&
+        px(f2) >= B.l && px(f2) <= B.r &&
+        py(f1) >= B.t && py(f1) <= B.b
+      ) {
+        g.fillStyle = '#f3c078';
+        g.beginPath();
+        g.arc(px(f2), py(f1), 5, 0, Math.PI * 2);
+        g.fill();
+
+        g.strokeStyle = '#ffffff';
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.arc(px(f2), py(f1), 8, 0, Math.PI * 2);
+        g.stroke();
+      }
 
       readout.textContent =
         `${time.toFixed(2)}s · F1 ${Math.round(f1)} Hz · F2 ${Math.round(f2)} Hz`;
